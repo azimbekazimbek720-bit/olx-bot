@@ -15,8 +15,16 @@ OLX_URL = os.environ["OLX_URL"]
 SEEN_FILE = "seen_ads.json"
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-                  "(KHTML, like Gecko) Chrome/124.0 Safari/537.36",
-    "Accept-Language": "ru-RU,ru;q=0.9",
+                  "(KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+    "Accept-Language": "ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7",
+    "Accept-Encoding": "gzip, deflate, br",
+    "Referer": "https://www.olx.kz/",
+    "Sec-Fetch-Dest": "document",
+    "Sec-Fetch-Mode": "navigate",
+    "Sec-Fetch-Site": "same-origin",
+    "Upgrade-Insecure-Requests": "1",
+    "Cache-Control": "no-cache",
 }
 
 
@@ -48,8 +56,18 @@ def send_telegram(text, url):
 
 
 def fetch_ads():
-    resp = requests.get(OLX_URL, headers=HEADERS, timeout=15)
-    resp.raise_for_status()
+    try:
+        resp = requests.get(OLX_URL, headers=HEADERS, timeout=15)
+        resp.raise_for_status()
+    except requests.exceptions.HTTPError as e:
+        code = e.response.status_code if e.response is not None else "?"
+        print(f"OLX вернул ошибку {code} — похоже на временную блокировку. "
+              f"Пропускаем эту проверку, попробуем в следующий раз.")
+        return None
+    except requests.exceptions.RequestException as e:
+        print(f"Сетевая ошибка при запросе к OLX: {e}. Пропускаем эту проверку.")
+        return None
+
     soup = BeautifulSoup(resp.text, "html.parser")
 
     ads = []
@@ -79,6 +97,9 @@ def main():
     first_run = len(seen) == 0
 
     ads = fetch_ads()
+    if ads is None:
+        # блокировка/сбой сети - тихо выходим, следующий запуск попробует снова
+        return
     print(f"Найдено объявлений на странице: {len(ads)}")
 
     if first_run:
